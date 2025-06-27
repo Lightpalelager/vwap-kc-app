@@ -1,120 +1,129 @@
 import streamlit as st
 from datetime import datetime
 
-# Define the logic mapping based on input conditions
-strategy_map = {
-    ("Above VWAP", "Rising", "Above KC Upper", "Large"): (
-        "Overbought, strong momentum but likely overextended",
-        "Take profits, consider partial exit"
-    ),
-    ("Above VWAP", "Rising", "Between KC Middle & Upper", "Moderate"): (
-        "Healthy uptrend, price supported by volume",
-        "Buy on pullbacks toward VWAP"
-    ),
-    ("Above VWAP", "Rising", "Near VWAP", "Small"): (
-        "Early stage of uptrend",
-        "Consider entering longs"
-    ),
-    ("Above VWAP", "Falling", "Above KC Upper", "Large"): (
-        "Weakening volume despite price strength",
-        "Be cautious, reduce longs"
-    ),
-    ("Above VWAP", "Falling", "Between KC Middle & Upper", "Moderate"): (
-        "Possible trend reversal",
-        "Wait for confirmation, tighten stops"
-    ),
-    ("At VWAP", "Rising", "At or Near KC Middle", "N/A"): (
-        "VWAP is support, volume confirming",
-        "Buy with confirmation"
-    ),
-    ("At VWAP", "Falling", "At or Near KC Middle", "N/A"): (
-        "VWAP support weakening",
-        "Watch for breakdown, be cautious"
-    ),
-    ("Below VWAP", "Falling", "Below KC Lower", "Large"): (
-        "Strong bearish trend, price oversold",
-        "Consider shorts, wait for pullbacks"
-    ),
-    ("Below VWAP", "Falling", "Between KC Middle & Lower", "Moderate"): (
-        "Bearish but not oversold",
-        "Short or wait for confirmation"
-    ),
-    ("Below VWAP", "Rising", "Below KC Lower", "Large"): (
-        "Possible early bounce attempt",
-        "Watch closely for reversal"
-    ),
-    ("Below VWAP", "Rising", "Between KC Middle & Lower", "Moderate"): (
-        "Potential pullback in bearish trend",
-        "Wait for bounce or confirmation"
-    ),
-}
+# Session state for scenario history
+if "scenario_history" not in st.session_state:
+    st.session_state["scenario_history"] = []
 
-def get_distance_label(diff):
-    # Set your custom thresholds here
-    if diff >= 5:
-        return "Large"
-    elif diff >= 2:
-        return "Moderate"
-    elif diff > 0:
-        return "Small"
+st.title("Advanced Market Scenario Interpreter")
+
+# Inputs
+price = st.number_input("Current Price")
+vwap = st.number_input("VWAP")
+kc_upper = st.number_input("KC Upper Band")
+kc_middle = st.number_input("KC Middle (EMA)")
+kc_lower = st.number_input("KC Lower Band")
+auto_deviation = st.checkbox("Auto-calculate Deviation from VWAP", value=True)
+
+if auto_deviation and vwap != 0:
+    deviation = abs((price - vwap) / vwap) * 100
+    if deviation < 0.3:
+        deviation_label = "Neutral (<0.3%)"
+    elif deviation < 0.7:
+        deviation_label = "Slight (0.3%-0.7%)"
+    elif deviation < 1.5:
+        deviation_label = "Stretched (0.7%-1.5%)"
     else:
-        return "N/A"
+        deviation_label = "Extreme (>1.5%)"
+else:
+    deviation_label = st.radio(
+        "VWAP Deviation",
+        ["Neutral (<0.3%)", "Slight (0.3%-0.7%)", "Stretched (0.7%-1.5%)", "Extreme (>1.5%)"]
+    )
 
-st.title("VWAP & Keltner Channel Interpretation Tool")
+scenario_label = ""
+risk_level = ""
+trade_idea = ""
+warning = ""
 
-# Initialize session state history
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-with st.form(key='input_form'):
-    price_vwap = st.radio("Price vs VWAP", ["Above VWAP", "At VWAP", "Below VWAP"])
-    vwap_slope = st.radio("VWAP Slope", ["Rising", "Falling"])
-    kc_position = st.radio("KC Position", [
-        "Above KC Upper",
-        "Between KC Middle & Upper",
-        "Near VWAP",
-        "At or Near KC Middle",
-        "Between KC Middle & Lower",
-        "Below KC Lower"
-    ])
-    points_diff = st.number_input("Points Difference (Current Price - VWAP)", value=0.0, step=0.01)
-    distance = get_distance_label(abs(points_diff))
-    st.markdown(f"**Calculated Distance from VWAP:** `{distance}`")
-    submit_button = st.form_submit_button(label='Interpret')
-
-if submit_button:
-    key = (price_vwap, vwap_slope, kc_position, distance)
-    if key in strategy_map:
-        interpretation, action = strategy_map[key]
-        st.markdown(f"### 📊 Interpretation:\n{interpretation}")
-        st.markdown(f"### ✅ Action:\n{action}")
-
-        # Add to history
-        st.session_state.history.insert(0, {
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "price_vwap": price_vwap,
-            "vwap_slope": vwap_slope,
-            "kc_position": kc_position,
-            "distance": distance,
-            "points_diff": points_diff,
-            "interpretation": interpretation,
-            "action": action
-        })
+if st.button("Interpret"):
+    # Detailed scenario mapping
+    if price > kc_upper:
+        if price > vwap:
+            if "Extreme" in deviation_label:
+                scenario_label = "Overextended Breakout"
+                risk_level = "High Risk"
+                trade_idea = "Consider taking profits or waiting for a pullback."
+                warning = "Caution: Chasing highs here is risky; reversal possible."
+            else:
+                scenario_label = "Healthy Breakout"
+                risk_level = "Low Risk"
+                trade_idea = "Trend-following long entry possible."
+                warning = "Monitor for signs of exhaustion if deviation increases."
+        else:
+            scenario_label = "Suspect Breakout / Fakeout Risk"
+            risk_level = "High Risk"
+            trade_idea = "Avoid new longs, possible reversal."
+            warning = "Breakout not confirmed by VWAP."
+    elif price < kc_lower:
+        if price < vwap:
+            if "Extreme" in deviation_label:
+                scenario_label = "Overextended Breakdown"
+                risk_level = "High Risk"
+                trade_idea = "Consider covering shorts or watching for bounce."
+                warning = "Caution: Chasing lows here is risky; snapback possible."
+            else:
+                scenario_label = "Healthy Breakdown"
+                risk_level = "Low Risk"
+                trade_idea = "Trend-following short entry possible."
+                warning = "Monitor for signs of exhaustion if deviation increases."
+        else:
+            scenario_label = "Suspect Breakdown / Bear Trap Risk"
+            risk_level = "High Risk"
+            trade_idea = "Avoid new shorts, possible reversal."
+            warning = "Breakdown not confirmed by VWAP."
+    elif kc_middle < price < kc_upper:
+        if price > vwap:
+            scenario_label = "Trend-Follow Long Setup"
+            risk_level = "Low Risk" if "Neutral" in deviation_label or "Slight" in deviation_label else "Medium Risk"
+            trade_idea = "Long entries favored, watch for resistance at upper band."
+            warning = "If deviation gets stretched, manage risk."
+        else:
+            scenario_label = "Weak Rally, Mean-Reversion Possible"
+            risk_level = "Medium Risk"
+            trade_idea = "Be cautious with longs; reversal possible."
+            warning = "VWAP not confirming uptrend."
+    elif kc_lower < price < kc_middle:
+        if price < vwap:
+            scenario_label = "Trend-Follow Short Setup"
+            risk_level = "Low Risk" if "Neutral" in deviation_label or "Slight" in deviation_label else "Medium Risk"
+            trade_idea = "Short entries favored, watch for support at lower band."
+            warning = "If deviation gets stretched, manage risk."
+        else:
+            scenario_label = "Weak Dip, Mean-Reversion Possible"
+            risk_level = "Medium Risk"
+            trade_idea = "Be cautious with shorts; reversal possible."
+            warning = "VWAP not confirming downtrend."
     else:
-        st.warning("No interpretation found for this combination.")
+        scenario_label = "Balanced / Range-Bound Market"
+        risk_level = "Low Risk"
+        trade_idea = "Range or mean-reversion strategies favored."
+        warning = "Wait for breakout or clear trend."
 
-# Display session history
-if st.session_state.history:
-    st.markdown("---")
-    st.subheader("🕘 History")
-    for entry in st.session_state.history[:10]:
-        st.markdown(
-            f"**{entry['timestamp']}** | *{entry['price_vwap']} / {entry['vwap_slope']} / {entry['kc_position']} / {entry['distance']}* (Δ={entry['points_diff']})\n\n"
-            f"- 📊 {entry['interpretation']}\n"
-            f"- ✅ {entry['action']}"
-        )
+    st.subheader("Scenario Interpretation")
+    st.write(f"**Scenario:** {scenario_label}")
+    st.write(f"**Risk Level:** {risk_level}")
+    st.write(f"**Trade Idea:** {trade_idea}")
+    st.write(f"**Warning:** {warning}")
 
-# Clear history button
-if st.button("Clear History"):
-    st.session_state.history.clear()
-    st.success("History cleared!")
+    # Save scenario to history
+    scenario_data = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "price": price,
+        "vwap": vwap,
+        "kc_upper": kc_upper,
+        "kc_middle": kc_middle,
+        "kc_lower": kc_lower,
+        "deviation_label": deviation_label,
+        "scenario_label": scenario_label,
+        "risk_level": risk_level,
+        "trade_idea": trade_idea,
+        "warning": warning,
+    }
+    st.session_state["scenario_history"].insert(0, scenario_data)  # Insert at beginning
+
+# Show scenario history
+st.subheader("Scenario History (Last 10)")
+for s in st.session_state["scenario_history"][:10]:
+    st.write(f"{s['timestamp']} | Scenario: {s['scenario_label']} | Price: {s['price']} | VWAP: {s['vwap']} | Deviation: {s['deviation_label']} | Risk: {s['risk_level']}")
+
