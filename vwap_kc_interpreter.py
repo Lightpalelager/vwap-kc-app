@@ -126,4 +126,3 @@ if st.button("Interpret"):
 st.subheader("Scenario History (Last 10)")
 for s in st.session_state["scenario_history"][:10]:
     st.write(f"{s['timestamp']} | Scenario: {s['scenario_label']} | Price: {s['price']} | VWAP: {s['vwap']} | Deviation: {s['deviation_label']} | Risk: {s['risk_level']}")
-
