@@ -49,48 +49,70 @@ strategy_map = {
     ),
 }
 
+def get_distance_label(diff):
+    # Set your custom thresholds here
+    if diff >= 5:
+        return "Large"
+    elif diff >= 2:
+        return "Moderate"
+    elif diff > 0:
+        return "Small"
+    else:
+        return "N/A"
+
 st.title("VWAP & Keltner Channel Interpretation Tool")
 
 # Initialize session state history
 if "history" not in st.session_state:
     st.session_state.history = []
 
-price_vwap = st.selectbox("Price vs VWAP", ["Above VWAP", "At VWAP", "Below VWAP"])
-vwap_slope = st.selectbox("VWAP Slope", ["Rising", "Falling"])
-kc_position = st.selectbox("KC Position", [
-    "Above KC Upper",
-    "Between KC Middle & Upper",
-    "Near VWAP",
-    "At or Near KC Middle",
-    "Between KC Middle & Lower",
-    "Below KC Lower"
-])
-distance = st.selectbox("Distance from VWAP", ["Large", "Moderate", "Small", "N/A"])
+with st.form(key='input_form'):
+    price_vwap = st.radio("Price vs VWAP", ["Above VWAP", "At VWAP", "Below VWAP"])
+    vwap_slope = st.radio("VWAP Slope", ["Rising", "Falling"])
+    kc_position = st.radio("KC Position", [
+        "Above KC Upper",
+        "Between KC Middle & Upper",
+        "Near VWAP",
+        "At or Near KC Middle",
+        "Between KC Middle & Lower",
+        "Below KC Lower"
+    ])
+    points_diff = st.number_input("Points Difference (Current Price - VWAP)", value=0.0, step=0.01)
+    distance = get_distance_label(abs(points_diff))
+    st.markdown(f"**Calculated Distance from VWAP:** `{distance}`")
+    submit_button = st.form_submit_button(label='Interpret')
 
-key = (price_vwap, vwap_slope, kc_position, distance)
+if submit_button:
+    key = (price_vwap, vwap_slope, kc_position, distance)
+    if key in strategy_map:
+        interpretation, action = strategy_map[key]
+        st.markdown(f"### 📊 Interpretation:\n{interpretation}")
+        st.markdown(f"### ✅ Action:\n{action}")
 
-if key in strategy_map:
-    interpretation, action = strategy_map[key]
-    st.markdown(f"### 📊 Interpretation:\n{interpretation}")
-    st.markdown(f"### ✅ Action:\n{action}")
-
-    # Add to history
-    st.session_state.history.insert(0, {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "price_vwap": price_vwap,
-        "vwap_slope": vwap_slope,
-        "kc_position": kc_position,
-        "distance": distance,
-        "interpretation": interpretation,
-        "action": action
-    })
+        # Add to history
+        st.session_state.history.insert(0, {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "price_vwap": price_vwap,
+            "vwap_slope": vwap_slope,
+            "kc_position": kc_position,
+            "distance": distance,
+            "points_diff": points_diff,
+            "interpretation": interpretation,
+            "action": action
+        })
+    else:
+        st.warning("No interpretation found for this combination.")
 
 # Display session history
 if st.session_state.history:
     st.markdown("---")
     st.subheader("🕘 History")
     for entry in st.session_state.history[:10]:
-        st.markdown(f"**{entry['timestamp']}** | *{entry['price_vwap']} / {entry['vwap_slope']} / {entry['kc_position']} / {entry['distance']}*\n\n- 📊 {entry['interpretation']}\n- ✅ {entry['action']}")
+        st.markdown(
+            f"**{entry['timestamp']}** | *{entry['price_vwap']} / {entry['vwap_slope']} / {entry['kc_position']} / {entry['distance']}* (Δ={entry['points_diff']})\n\n"
+            f"- 📊 {entry['interpretation']}\n"
+            f"- ✅ {entry['action']}"
+        )
 
 # Clear history button
 if st.button("Clear History"):
